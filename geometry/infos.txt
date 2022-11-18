@@ -1,0 +1,12 @@
+<numberOfRows>6148</numberOfRows>
+<numberOfColumns>11162</numberOfColumns>
+<sceneCenterCoord>
+ 	<refRow>3073</refRow>
+ 	<refColumn>5553</refColumn>
+ 	<lat>4.88622297575189677E+01</lat>
+ 	<lon>2.28858142767208861E+00</lon>
+	<azimuthTimeUTC>2009-01-24T17:34:35.170948Z</azimuthTimeUTC>
+	<rangeTime>4.10636626744230633E-03</rangeTime>
+	<incidenceAngle>3.46894201357813330E+01</incidenceAngle>
+</sceneCenterCoord>
+
