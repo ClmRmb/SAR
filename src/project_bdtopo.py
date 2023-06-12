@@ -26,8 +26,9 @@ from shapely.ops import unary_union
 from skimage.draw import polygon_perimeter, polygon2mask, polygon
 from tomogeo import Geo
 from math import atan2
-# import sys
-# sys.path.insert(0, r'/home/rambourc/LABSAR')
+import sys
+sys.path.insert(0, r'/home/rambourc/LABSAR')
+
 #from pygeom_V41 import longlat2XYZ
 from satellites import pydecoupe_TSX_V41 as TSX
 
@@ -217,14 +218,16 @@ def burn2grid(geo,shapes,Zq,delta=0,slice_mode=False):
         for l in range(len(Zq)):
             zq = Zq[l]
             #occlusion = occlusions[zq]
-            for k in range(len(shapes)):
+            for k in tqdm(range(len(shapes))):
                 
                 #pol = occlusion.difference(occlusion.difference(shapes[k][0].buffer(0)))
                 #pol = occlusion
                 pol = shapes[k][0].buffer(0)
                 if pol.is_empty:
                     continue
-                z = shapes[k][1]
+                z_0 = 0
+                z = z_0 if np.isnan(shapes[k][1]) else shapes[k][1]
+                alt = z_0 if np.isnan(shapes[k][3]) else shapes[k][3]
                 if pol.geom_type == 'MultiPolygon':
                     y = []
                     x = []
@@ -235,19 +238,13 @@ def burn2grid(geo,shapes,Zq,delta=0,slice_mode=False):
                     y, x = pol.exterior.coords.xy
                 
 
-                rg = [geo.ground_ind2radar_ind(int(ix),int(iy),zrel) 
+                rg = [geo.ground_ind2radar_ind(int(ix),int(iy),zrel + alt) 
                         for ix, iy, zrel in zip(x,y,np.full(len(x),zq))]
                 
-                if zq >= z - geo.res_z/2 and zq <= z + geo.res_z/2: 
-                    vertices = np.array((rg,x)).T
-                    path = Path(vertices)
-                    tmp = path.contains_points(grid).reshape((nc,nl)).T
-                    raster[:,:,l] += tmp*zq    
-                elif zq < z - geo.res_z/2:
-                    
-                    #rr, cc = polygon_perimeter(x, rg, shape=(nl,nc), clip=True)
-                    #raster[rr,cc,l] = zq
-                    mask = z*polygon2mask((nl,nc), list(zip(x, rg)))
+                if zq < z:
+  
+                    pol = list(zip(x,rg))
+                    mask = zq*polygon2mask((nl,nc), pol)
                     raster[:,:,l]+=mask
     else:
         for k in tqdm(range(len(shapes))):
@@ -258,7 +255,7 @@ def burn2grid(geo,shapes,Zq,delta=0,slice_mode=False):
             z_0 = 0
             z = z_0 if np.isnan(shapes[k][1]) else shapes[k][1]
             alt = z_0 if np.isnan(shapes[k][3]) else shapes[k][3]
-            centroid = shapes[k][2]
+            
             if pol.geom_type == 'MultiPolygon':
                 y = []
                 x = []
@@ -268,9 +265,10 @@ def burn2grid(geo,shapes,Zq,delta=0,slice_mode=False):
             else:
                 y, x = pol.exterior.coords.xy
             
-            if centroid[0][0]==2.2766607776787247 and centroid[1][0]==48.84457724743157:
-                x = x[:-16]
-                y = y[:-16]
+            # centroid = shapes[k][2]
+            # if centroid[0][0]==2.2766607776787247 and centroid[1][0]==48.84457724743157:
+            #     x = x[:-16]
+            #     y = y[:-16]
 
             rg_ground = [geo.ground_ind2radar_ind(int(ix),int(iy),zrel + alt) 
                     for ix, iy, zrel in zip(x,y,np.full(len(x),0))]
@@ -401,19 +399,20 @@ if __name__ == "__main__":
 #%% Minimal example Full Paris
 
 
-nomthr = 'path/to/image/TSX1_SAR__SSC______HS_S_SRA_20120723T173457_20120723T173457.xml'
+nomthr = '/home/rambourc/SAR/data/20120723/TSX1_SAR__SSC______HS_S_SRA_20120723T173457_20120723T173457.xml'
 
 
-trajG = '/home/rambourc/LABSAR/Paris/test_G.npy'
-trajS = '/home/rambourc/LABSAR/Paris/test_S.npy'
-longlat = '/home/rambourc/LABSAR/Paris/test_longlat.npy'
-im = '/home/rambourc/LABSAR/Paris/test_visu.npy'
+trajG = '/home/rambourc/SAR/data/test_G.npy'
+trajS = '/home/rambourc/SAR/data/test_S.npy'
+longlat = '/home/rambourc/SAR/data/test_longlat.npy'
+im = '/home/rambourc/SAR/data/test_visu.npy'
 
 
-shapefile = '../data/bati13.gpkg'
-Z = [0]
+shapefile = '/home/rambourc/SAR/data/bat_idf.gpkg'
+Z = [10]
 destination = 'testfull'
 maspydec = TSX.charger(nomthr)
+frame_coords = maspydec.point2image((2.277852,48.846654))
 
 with fiona.open(shapefile,'r') as shp:
     im = np.load(im)
@@ -421,6 +420,7 @@ with fiona.open(shapefile,'r') as shp:
     trajS = np.load(trajS)
     traj = np.concatenate((trajG,trajS),2)
     coord_grid = np.load(longlat)
+    frame_coords = (frame_coords[0]-coord_grid[0]//2, frame_coords[1]-coord_grid[1]//2)
     bounds = np.amin(coord_grid[:,:,1]), np.amin(coord_grid[:,:,0]),\
             np.amax(coord_grid[:,:,1]), np.amax(coord_grid[:,:,0])
     crs = 'epsg:4326'
@@ -437,13 +437,23 @@ with fiona.open(shapefile,'r') as shp:
     if shp.crs != crs:
         shp = reproject(shp, crs)
     clipped_shapes = crop_shapefile_to_raster(shp, bounds)
-    clipped_shapes = coord2ind(coord_grid,clipped_shapes,spydec=maspydec,frame_coords=[2471, 16090])
-    out = burn2grid(geo,clipped_shapes,Z,delta=0,slice_mode=False)
+    clipped_shapes = coord2ind(coord_grid,clipped_shapes,spydec=maspydec,frame_coords=[4464, 932])
+    out = burn2grid(geo,clipped_shapes,Z,delta=0,slice_mode=True)
     #out_no_occ = remove_occlusions(geo,clipped_shapes,out,args.Z)
     plt.figure(figsize=(10,10))
     #plt.imshow(out[:,:,0])
     plt.imshow(im,cmap='gray')
-    plt.imshow(out[::-1,:,0],alpha=0.4)
+    plt.imshow(out[:,:,0],alpha=0.4)
     np.save(destination,out)
 
 
+#%%
+Z = range(0,100)
+geo.res_z = .5
+out = burn2grid(geo,clipped_shapes,Z,delta=0,slice_mode=True)
+#out_no_occ = remove_occlusions(geo,clipped_shapes,out,args.Z)
+plt.figure(figsize=(10,10))
+#plt.imshow(out[:,:,0])
+plt.imshow(im,cmap='gray')
+plt.imshow(out[:,:,0],alpha=0.4)
+# %%
