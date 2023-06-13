@@ -173,38 +173,6 @@ def coord2ind(coord_grid,shapes,f_lat=None,f_long=None,spydec=None,frame_coords=
 
 
 
-def dichotomy(M, lim=20, axis=0, left=[]):
-    if axis==1:
-        M = np.transpose(M)
-    a = M.shape[0]//2
-    b = M.shape[1]//2
-    if a<lim:
-        return left
-    if M[a//2,b]>M[a + a//2, b]:
-        left.append(1)
-        return dichotomy(M[:a,:],left=left)
-    else:
-        left.append(0)
-        return dichotomy(M[a:,:],left=left)
-    
-def dicho2ind(center,width,left):
-    half = width//2
-    for l in left:
-        if left:
-            center=center - half//2
-        else:
-            center=center + half//2
-        half=half//2
-    
-def find_nearest(array,value):
-    idx_sort = np.argsort(array)
-    idx = np.searchsorted(array[idx_sort], value, side="left")
-    if idx > 0 and (idx == len(array) or math.fabs(value - array[idx-1]) < math.fabs(value - array[idx])):
-        return array[idx-1]
-    else:
-        return array[idx]
-
-
 def burn2grid(geo,shapes,Zq,delta=0,slice_mode=False):
     nl, nc = (geo.Nbx, geo.Nby)
     x, y = np.meshgrid(np.arange(nl), np.arange(nc))
