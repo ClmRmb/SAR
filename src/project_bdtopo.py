@@ -215,10 +215,10 @@ def burn2grid(geo,shapes,Zq,delta=0,slice_mode=False):
     #occlusions = get_occlusions(geo,shapes,Zq)
 
     if slice_mode:
-        for l in range(len(Zq)):
+        for l in tqdm(range(len(Zq))):
             zq = Zq[l]
             #occlusion = occlusions[zq]
-            for k in tqdm(range(len(shapes))):
+            for k in range(len(shapes)):
                 
                 #pol = occlusion.difference(occlusion.difference(shapes[k][0].buffer(0)))
                 #pol = occlusion
@@ -246,6 +246,7 @@ def burn2grid(geo,shapes,Zq,delta=0,slice_mode=False):
                     pol = list(zip(x,rg))
                     mask = zq*polygon2mask((nl,nc), pol)
                     raster[:,:,l]+=mask
+            raster[:,:,l] = np.minimum(zq,raster[:,:,l])
     else:
         for k in tqdm(range(len(shapes))):
 
@@ -409,7 +410,7 @@ im = '/home/rambourc/SAR/data/test_visu.npy'
 
 
 shapefile = '/home/rambourc/SAR/data/bat_idf.gpkg'
-Z = [10]
+Z = [0.5]
 destination = 'testfull'
 maspydec = TSX.charger(nomthr)
 frame_coords = maspydec.point2image((2.277852,48.846654))
@@ -438,7 +439,7 @@ with fiona.open(shapefile,'r') as shp:
         shp = reproject(shp, crs)
     clipped_shapes = crop_shapefile_to_raster(shp, bounds)
     clipped_shapes = coord2ind(coord_grid,clipped_shapes,spydec=maspydec,frame_coords=[4464, 932])
-    out = burn2grid(geo,clipped_shapes,Z,delta=0,slice_mode=True)
+    out = burn2grid(geo,clipped_shapes,Z,delta=0,slice_mode=False)
     #out_no_occ = remove_occlusions(geo,clipped_shapes,out,args.Z)
     plt.figure(figsize=(10,10))
     #plt.imshow(out[:,:,0])
@@ -448,8 +449,8 @@ with fiona.open(shapefile,'r') as shp:
 
 
 #%%
-Z = range(0,100)
-geo.res_z = .5
+Z = range(0,100,1)
+
 out = burn2grid(geo,clipped_shapes,Z,delta=0,slice_mode=True)
 #out_no_occ = remove_occlusions(geo,clipped_shapes,out,args.Z)
 plt.figure(figsize=(10,10))
